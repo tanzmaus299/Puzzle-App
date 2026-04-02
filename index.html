@@ -1,101 +1,67 @@
-import React, { useState, useEffect } from "react";
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Puzzle App</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
 
-export default function PuzzleApp() { const [puzzles, setPuzzles] = useState([]); const [search, setSearch] = useState(""); const [filter, setFilter] = useState("Alle"); const [form, setForm] = useState({ name: "", pieces: "", brand: "", status: "Nicht gebaut", rating: "", image: "", });
+<body class="bg-gray-100">
+<div id="root"></div>
 
-useEffect(() => { const saved = localStorage.getItem("puzzles"); if (saved) setPuzzles(JSON.parse(saved)); }, []);
+<script type="text/babel">
 
-useEffect(() => { localStorage.setItem("puzzles", JSON.stringify(puzzles)); }, [puzzles]);
+const { useState, useEffect } = React;
 
-const addPuzzle = () => { if (!form.name || !form.pieces) return; setPuzzles([...puzzles, { ...form, id: Date.now() }]); setForm({ name: "", pieces: "", brand: "", status: "Nicht gebaut", rating: "", image: "", }); };
+function App() {
+  const [puzzles, setPuzzles] = useState([]);
+  const [name, setName] = useState("");
 
-const deletePuzzle = (id) => { setPuzzles(puzzles.filter((p) => p.id !== id)); };
+  useEffect(() => {
+    const saved = localStorage.getItem("puzzles");
+    if (saved) setPuzzles(JSON.parse(saved));
+  }, []);
 
-const handleImageUpload = (e) => { const file = e.target.files[0]; if (!file) return; const reader = new FileReader(); reader.onload = () => { setForm({ ...form, image: reader.result }); }; reader.readAsDataURL(file); };
+  useEffect(() => {
+    localStorage.setItem("puzzles", JSON.stringify(puzzles));
+  }, [puzzles]);
 
-const filteredPuzzles = puzzles.filter((p) => { const matchesSearch = p.name.toLowerCase().includes(search.toLowerCase()); const matchesFilter = filter === "Alle" || p.status === filter; return matchesSearch && matchesFilter; });
+  const addPuzzle = () => {
+    if (!name) return;
+    setPuzzles([...puzzles, { id: Date.now(), name }]);
+    setName("");
+  };
 
-// 📊 Statistiken const totalPuzzles = puzzles.length; const totalPieces = puzzles.reduce((sum, p) => sum + Number(p.pieces || 0), 0); const finished = puzzles.filter(p => p.status === "Fertig").length; const inProgress = puzzles.filter(p => p.status === "In Arbeit").length; const notStarted = puzzles.filter(p => p.status === "Nicht gebaut").length;
+  return (
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">🧩 Meine Puzzle</h1>
 
-return ( <div className="min-h-screen bg-gray-100 p-6 font-sans"> <h1 className="text-3xl font-bold mb-6">🧩 Meine Puzzle Sammlung</h1>
+      <input
+        className="border p-2 mr-2"
+        value={name}
+        onChange={e => setName(e.target.value)}
+        placeholder="Puzzle Name"
+      />
 
-{/* 📊 Statistik */}
-  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-    <div className="bg-white p-4 rounded-2xl shadow text-center">
-      <p className="text-sm text-gray-500">Puzzle gesamt</p>
-      <p className="text-xl font-bold">{totalPuzzles}</p>
+      <button className="bg-blue-500 text-white p-2" onClick={addPuzzle}>
+        Hinzufügen
+      </button>
+
+      <ul className="mt-4">
+        {puzzles.map(p => (
+          <li key={p.id}>{p.name}</li>
+        ))}
+      </ul>
     </div>
-    <div className="bg-white p-4 rounded-2xl shadow text-center">
-      <p className="text-sm text-gray-500">Teile gesamt</p>
-      <p className="text-xl font-bold">{totalPieces}</p>
-    </div>
-    <div className="bg-white p-4 rounded-2xl shadow text-center">
-      <p className="text-sm text-gray-500">Fertig</p>
-      <p className="text-xl font-bold">{finished}</p>
-    </div>
-    <div className="bg-white p-4 rounded-2xl shadow text-center">
-      <p className="text-sm text-gray-500">In Arbeit</p>
-      <p className="text-xl font-bold">{inProgress}</p>
-    </div>
-  </div>
+  );
+}
 
-  {/* Formular */}
-  <div className="bg-white p-4 rounded-2xl shadow mb-6 grid gap-3">
-    <input className="border p-2 rounded" placeholder="Motiv" value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} />
-    <input className="border p-2 rounded" placeholder="Teile" type="number" value={form.pieces} onChange={e => setForm({ ...form, pieces: e.target.value })} />
-    <input className="border p-2 rounded" placeholder="Hersteller" value={form.brand} onChange={e => setForm({ ...form, brand: e.target.value })} />
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 
-    <select className="border p-2 rounded" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
-      <option>Nicht gebaut</option>
-      <option>In Arbeit</option>
-      <option>Fertig</option>
-    </select>
-
-    <input className="border p-2 rounded" placeholder="Bewertung (1-5)" type="number" value={form.rating} onChange={e => setForm({ ...form, rating: e.target.value })} />
-
-    <input type="file" onChange={handleImageUpload} />
-
-    <button className="bg-blue-500 text-white p-2 rounded-xl" onClick={addPuzzle}>
-      ➕ Hinzufügen
-    </button>
-  </div>
-
-  {/* Suche & Filter */}
-  <div className="flex gap-3 mb-6">
-    <input
-      className="border p-2 rounded w-full"
-      placeholder="🔍 Suchen..."
-      value={search}
-      onChange={(e) => setSearch(e.target.value)}
-    />
-
-    <select className="border p-2 rounded" value={filter} onChange={(e) => setFilter(e.target.value)}>
-      <option>Alle</option>
-      <option>Nicht gebaut</option>
-      <option>In Arbeit</option>
-      <option>Fertig</option>
-    </select>
-  </div>
-
-  {/* Liste */}
-  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-    {filteredPuzzles.map((p) => (
-      <div key={p.id} className="bg-white p-4 rounded-2xl shadow">
-        <h2 className="text-xl font-semibold">{p.name}</h2>
-        <p className="text-sm text-gray-600">{p.brand}</p>
-        <p className="mt-2">🧩 {p.pieces} Teile</p>
-        <p>📊 {p.status}</p>
-        <p>⭐ {p.rating || "-"}</p>
-
-        {p.image && (
-          <img src={p.image} alt="Puzzle" className="mt-2 rounded-xl" />
-        )}
-
-        <button className="mt-3 text-red-500" onClick={() => deletePuzzle(p.id)}>
-          ❌ Löschen
-        </button>
-      </div>
-    ))}
-  </div>
-</div>
-
-); }a
+</script>
+</body>
+</html>
