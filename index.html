@@ -1,45 +1,18 @@
-<!DOCTYPE html>
-<html lang="de">
+<!DOCTYPE html><html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Puzzle App</title>
-
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
-  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
-  <!-- Firebase -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
-</head>
-
-<body class="bg-gray-100">
-<div id="root"></div>
-
-<script type="text/babel">
+  <title>Puzzle App</title>  <script src="https://cdn.tailwindcss.com"></script>  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script></head><body class="bg-gray-100">
+<div id="root"></div><script type="text/babel">
 
 const { useState, useEffect } = React;
-
-// 🔥 Firebase Config
-const firebaseConfig = {
-  apiKey: "AIzaSyB7U9ZXPKiA2FiBt5zu3F1FnX54DBj69R8",
-  authDomain: "puzzle-app-f4ad3.firebaseapp.com",
-  projectId: "puzzle-app-f4ad3",
-  storageBucket: "puzzle-app-f4ad3.firebasestorage.app",
-  messagingSenderId: "870893601279",
-  appId: "1:870893601279:web:e79a91d0e1ebc18b0827ca"
-};
-
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
 
 function App() {
   const [puzzles, setPuzzles] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Alle");
   const [editId, setEditId] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -50,24 +23,23 @@ function App() {
     image: "",
   });
 
-  // 🔄 Live Sync
   useEffect(() => {
-    const unsubscribe = db.collection("puzzles").onSnapshot(snapshot => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setPuzzles(data);
-    });
-
-    return () => unsubscribe();
+    const saved = localStorage.getItem("puzzles");
+    if (saved) setPuzzles(JSON.parse(saved));
   }, []);
 
-  const addOrUpdatePuzzle = async () => {
+  useEffect(() => {
+    localStorage.setItem("puzzles", JSON.stringify(puzzles));
+  }, [puzzles]);
+
+  const addOrUpdatePuzzle = () => {
     if (!form.name || !form.pieces) return;
 
     if (editId) {
-      await db.collection("puzzles").doc(editId).set(form);
+      setPuzzles(puzzles.map(p => p.id === editId ? { ...form, id: editId } : p));
       setEditId(null);
     } else {
-      await db.collection("puzzles").add(form);
+      setPuzzles([...puzzles, { ...form, id: Date.now() }]);
     }
 
     setForm({ name:"", pieces:"", brand:"", status:"Nicht gebaut", rating:"", image:"" });
@@ -78,15 +50,39 @@ function App() {
     setEditId(p.id);
   };
 
-  const deletePuzzle = async (id) => {
-    await db.collection("puzzles").doc(id).delete();
+  const deletePuzzle = (id) => {
+    setPuzzles(puzzles.filter(p => p.id !== id));
   };
 
+  // 🔧 Bild verkleinern (wichtig!)
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+
+    const img = new Image();
     const reader = new FileReader();
-    reader.onload = () => setForm({ ...form, image: reader.result });
+
+    reader.onload = (event) => {
+      img.src = event.target.result;
+    };
+
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const maxWidth = 800;
+      const scale = maxWidth / img.width;
+
+      canvas.width = maxWidth;
+      canvas.height = img.height * scale;
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const compressed = canvas.toDataURL("image/jpeg", 0.7);
+
+      setForm(prev => ({ ...prev, image: compressed }));
+    };
+
     reader.readAsDataURL(file);
   };
 
@@ -103,7 +99,7 @@ function App() {
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">🧩 Meine Puzzle Sammlung (Cloud)</h1>
+      <h1 className="text-3xl font-bold mb-4">🧩 Meine Puzzle Sammlung</h1>
 
       {/* Formular */}
       <div className="bg-white p-4 rounded shadow mb-4 grid gap-2">
@@ -144,7 +140,15 @@ function App() {
           <div>{p.brand}</div>
           <div>{p.status}</div>
           <div>⭐ {p.rating || "-"}</div>
-          {p.image && <img src={p.image} width="100"/>}
+
+          {p.image && (
+            <img 
+              src={p.image} 
+              width="100" 
+              className="cursor-pointer"
+              onClick={() => setSelectedImage(p.image)}
+            />
+          )}
 
           <div className="mt-2 flex gap-2">
             <button onClick={()=>editPuzzle(p)}>✏️ Bearbeiten</button>
@@ -152,12 +156,22 @@ function App() {
           </div>
         </div>
       ))}
+
+      {/* 🔍 Bild Vollbild */}
+      {selectedImage && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center"
+          onClick={() => setSelectedImage(null)}
+        >
+          <img src={selectedImage} className="max-w-full max-h-full" />
+        </div>
+      )}
+
     </div>
   );
 }
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 
-</script>
-</body>
+</script></body>
 </html>
