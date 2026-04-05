@@ -1,21 +1,46 @@
-<!DOCTYPE html><html lang="de">
+<!DOCTYPE html>
+<html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Puzzle App</title>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-</head><body class="bg-gray-100">
-<div id="root"></div><script type="text/babel">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="bg-gray-100">
+<div id="root"></div>
+
+<script type="text/babel">
 
 const { useState, useEffect } = React;
+
+// 🔥 Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyB7U9ZXPKiA2FiBt5zu3F1FnX54DBj69R8",
+  authDomain: "puzzle-app-f4ad3.firebaseapp.com",
+  projectId: "puzzle-app-f4ad3",
+  storageBucket: "puzzle-app-f4ad3.firebasestorage.app",
+  messagingSenderId: "870893601279",
+  appId: "1:870893601279:web:e79a91d0e1ebc18b0827ca"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
 
 function App() {
   const [puzzles, setPuzzles] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Alle");
+  const [editId, setEditId] = useState(null);
+
   const [form, setForm] = useState({
     name: "",
     pieces: "",
@@ -25,23 +50,36 @@ function App() {
     image: "",
   });
 
+  // 🔄 Live Sync
   useEffect(() => {
-    const saved = localStorage.getItem("puzzles");
-    if (saved) setPuzzles(JSON.parse(saved));
+    const unsubscribe = db.collection("puzzles").onSnapshot(snapshot => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setPuzzles(data);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    localStorage.setItem("puzzles", JSON.stringify(puzzles));
-  }, [puzzles]);
-
-  const addPuzzle = () => {
+  const addOrUpdatePuzzle = async () => {
     if (!form.name || !form.pieces) return;
-    setPuzzles([...puzzles, { ...form, id: Date.now() }]);
+
+    if (editId) {
+      await db.collection("puzzles").doc(editId).set(form);
+      setEditId(null);
+    } else {
+      await db.collection("puzzles").add(form);
+    }
+
     setForm({ name:"", pieces:"", brand:"", status:"Nicht gebaut", rating:"", image:"" });
   };
 
-  const deletePuzzle = (id) => {
-    setPuzzles(puzzles.filter(p => p.id !== id));
+  const editPuzzle = (p) => {
+    setForm(p);
+    setEditId(p.id);
+  };
+
+  const deletePuzzle = async (id) => {
+    await db.collection("puzzles").doc(id).delete();
   };
 
   const handleImageUpload = (e) => {
@@ -52,27 +90,20 @@ function App() {
     reader.readAsDataURL(file);
   };
 
-  const filtered = puzzles.filter(p =>
-    p.name.toLowerCase().includes(search.toLowerCase()) &&
-    (filter === "Alle" || p.status === filter)
-  );
+  const filtered = puzzles.filter(p => {
+    const text = search.toLowerCase();
+    const matchesSearch =
+      p.name.toLowerCase().includes(text) ||
+      p.brand.toLowerCase().includes(text);
 
-  const totalPuzzles = puzzles.length;
-  const totalPieces = puzzles.reduce((sum, p) => sum + Number(p.pieces || 0), 0);
-  const finished = puzzles.filter(p => p.status === "Fertig").length;
-  const inProgress = puzzles.filter(p => p.status === "In Arbeit").length;
+    const matchesFilter = filter === "Alle" || p.status === filter;
+
+    return matchesSearch && matchesFilter;
+  });
 
   return (
     <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">🧩 Meine Puzzle Sammlung</h1>
-
-      {/* Statistik */}
-      <div className="grid grid-cols-2 gap-3 mb-6">
-        <div className="bg-white p-3 rounded shadow">Puzzle: {totalPuzzles}</div>
-        <div className="bg-white p-3 rounded shadow">Teile: {totalPieces}</div>
-        <div className="bg-white p-3 rounded shadow">Fertig: {finished}</div>
-        <div className="bg-white p-3 rounded shadow">In Arbeit: {inProgress}</div>
-      </div>
+      <h1 className="text-3xl font-bold mb-4">🧩 Meine Puzzle Sammlung (Cloud)</h1>
 
       {/* Formular */}
       <div className="bg-white p-4 rounded shadow mb-4 grid gap-2">
@@ -90,7 +121,9 @@ function App() {
 
         <input type="file" onChange={handleImageUpload}/>
 
-        <button className="bg-blue-500 text-white p-2 rounded" onClick={addPuzzle}>➕ Hinzufügen</button>
+        <button className="bg-blue-500 text-white p-2 rounded" onClick={addOrUpdatePuzzle}>
+          {editId ? "💾 Speichern" : "➕ Hinzufügen"}
+        </button>
       </div>
 
       {/* Suche */}
@@ -112,7 +145,11 @@ function App() {
           <div>{p.status}</div>
           <div>⭐ {p.rating || "-"}</div>
           {p.image && <img src={p.image} width="100"/>}
-          <button onClick={()=>deletePuzzle(p.id)}>❌ Löschen</button>
+
+          <div className="mt-2 flex gap-2">
+            <button onClick={()=>editPuzzle(p)}>✏️ Bearbeiten</button>
+            <button onClick={()=>deletePuzzle(p.id)}>❌ Löschen</button>
+          </div>
         </div>
       ))}
     </div>
@@ -121,5 +158,6 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 
-</script></body>
+</script>
+</body>
 </html>
