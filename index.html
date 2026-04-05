@@ -13,6 +13,10 @@
   <!-- Firebase -->
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+
+  <!-- App Feeling -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6">
 </head>
 
 <body class="bg-gray-100">
@@ -51,13 +55,12 @@ function App() {
     image: "",
   });
 
-  // 🔄 Live Sync mit Firebase
+  // 🔄 Firebase Sync
   useEffect(() => {
     const unsubscribe = db.collection("puzzles").onSnapshot(snapshot => {
       const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       setPuzzles(data);
     });
-
     return () => unsubscribe();
   }, []);
 
@@ -117,21 +120,34 @@ function App() {
 
   const filtered = puzzles.filter(p => {
     const text = search.toLowerCase();
-    const matchesSearch =
-      p.name.toLowerCase().includes(text) ||
-      p.brand.toLowerCase().includes(text);
-
-    const matchesFilter = filter === "Alle" || p.status === filter;
-
-    return matchesSearch && matchesFilter;
+    return (
+      (p.name.toLowerCase().includes(text) || p.brand.toLowerCase().includes(text)) &&
+      (filter === "Alle" || p.status === filter)
+    );
   });
 
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-4">🧩 Meine Puzzle Sammlung (Cloud)</h1>
+    <div className="p-6 max-w-xl mx-auto">
+
+      <h1 className="text-3xl font-bold mb-4 text-center">🧩 Puzzle Sammlung</h1>
+
+      {/* 📊 Statistik */}
+      <div className="bg-white p-4 rounded-2xl shadow-md mb-4">
+        <h2 className="font-bold mb-2">📊 Statistik</h2>
+        <div>Gesamt: {puzzles.length}</div>
+        <div>Fertig: {puzzles.filter(p => p.status === "Fertig").length}</div>
+        <div>In Arbeit: {puzzles.filter(p => p.status === "In Arbeit").length}</div>
+        <div>
+          Ø Teile: {
+            puzzles.length
+              ? Math.round(puzzles.reduce((sum, p) => sum + Number(p.pieces), 0) / puzzles.length)
+              : 0
+          }
+        </div>
+      </div>
 
       {/* Formular */}
-      <div className="bg-white p-4 rounded shadow mb-4 grid gap-2">
+      <div className="bg-white p-4 rounded-2xl shadow-md mb-4 grid gap-2">
         <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
         <input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
         <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
@@ -146,14 +162,14 @@ function App() {
 
         <input type="file" onChange={handleImageUpload}/>
 
-        <button className="bg-blue-500 text-white p-2 rounded" onClick={addOrUpdatePuzzle}>
+        <button className="bg-blue-500 text-white p-2 rounded-xl" onClick={addOrUpdatePuzzle}>
           {editId ? "💾 Speichern" : "➕ Hinzufügen"}
         </button>
       </div>
 
       {/* Suche */}
       <div className="flex gap-2 mb-4">
-        <input placeholder="Suchen..." value={search} onChange={e=>setSearch(e.target.value)} />
+        <input className="flex-1" placeholder="Suchen..." value={search} onChange={e=>setSearch(e.target.value)} />
         <select value={filter} onChange={e=>setFilter(e.target.value)}>
           <option>Alle</option>
           <option>Nicht gebaut</option>
@@ -164,34 +180,31 @@ function App() {
 
       {/* Liste */}
       {filtered.map(p => (
-        <div key={p.id} className="bg-white p-3 rounded shadow mb-3">
+        <div key={p.id} className="bg-white p-4 rounded-2xl shadow-md mb-3">
           <b>{p.name}</b> ({p.pieces} Teile)
-          <div>{p.brand}</div>
+          <div className="text-sm text-gray-600">{p.brand}</div>
           <div>{p.status}</div>
           <div>⭐ {p.rating || "-"}</div>
 
           {p.image && (
             <img 
               src={p.image} 
-              width="100"
-              className="cursor-pointer"
+              className="w-24 mt-2 rounded-lg cursor-pointer"
               onClick={() => setSelectedImage(p.image)}
             />
           )}
 
           <div className="mt-2 flex gap-2">
-            <button onClick={()=>editPuzzle(p)}>✏️ Bearbeiten</button>
-            <button onClick={()=>deletePuzzle(p.id)}>❌ Löschen</button>
+            <button className="bg-yellow-400 px-2 py-1 rounded" onClick={()=>editPuzzle(p)}>✏️</button>
+            <button className="bg-red-500 text-white px-2 py-1 rounded" onClick={()=>deletePuzzle(p.id)}>❌</button>
           </div>
         </div>
       ))}
 
-      {/* 🔍 Vollbild Bild */}
+      {/* Vollbild */}
       {selectedImage && (
-        <div 
-          className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center"
-          onClick={() => setSelectedImage(null)}
-        >
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center"
+             onClick={() => setSelectedImage(null)}>
           <img src={selectedImage} className="max-w-full max-h-full" />
         </div>
       )}
