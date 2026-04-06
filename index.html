@@ -40,7 +40,7 @@ function Input(props){
   return (
     <input
       {...props}
-      className="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400"
+      className="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-200"
     />
   );
 }
@@ -107,6 +107,9 @@ function App() {
   };
 
   const deletePuzzle = async (id) => {
+    const confirmDelete = window.confirm("Willst du dieses Puzzle wirklich löschen?");
+    if (!confirmDelete) return;
+
     await db.collection("puzzles").doc(id).delete();
   };
 
@@ -163,29 +166,45 @@ function App() {
   return (
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">🧩 Puzzle</h1>
         <div className="flex gap-2">
-          <button onClick={()=>setView(view==='home'?'list':'home')} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">📊</button>
-          <button onClick={()=>setShowSearch(!showSearch)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">🔍</button>
-          <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
+          <button onClick={()=>setView(view==='home'?'list':'home')} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700 transition hover:scale-110">
+            {view === 'home' ? '📋' : '🏠'}
+          </button>
+          <button onClick={()=>setShowSearch(!showSearch)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700 transition hover:scale-110">🔍</button>
+          <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700 transition hover:scale-110">
             {dark ? "☀️" : "🌙"}
           </button>
         </div>
       </div>
 
+      {/* HOME */}
       {view === 'home' && (
-        <div className="space-y-3">
+        <div className="space-y-3 animate-fadeIn">
+
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow">
             <div className="text-sm opacity-60">Gesamt</div>
             <div className="text-2xl font-bold">{puzzles.length}</div>
           </div>
 
+          <button 
+            onClick={() => {
+              setPiecesFilter(null);
+              setView('list');
+            }}
+            className="w-full bg-blue-500 text-white p-3 rounded-xl transition hover:scale-[1.02]"
+          >
+            Alle Puzzle anzeigen
+          </button>
+
           <div className="space-y-2">
             {pieceGroups.map(([pieces, count]) => (
               <div key={pieces}
                 onClick={()=>{ setPiecesFilter(pieces); setView('list'); }}
-                className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow cursor-pointer flex justify-between">
+                className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow cursor-pointer flex justify-between transition hover:scale-[1.02]"
+              >
                 <span>{pieces} Teile</span>
                 <span className="font-bold">{count}</span>
               </div>
@@ -194,8 +213,10 @@ function App() {
         </div>
       )}
 
+      {/* LISTE */}
       {view === 'list' && (
-        <>
+        <div className="animate-fadeIn">
+
           {showSearch && (
             <input
               className="w-full mb-3 p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
@@ -216,7 +237,7 @@ function App() {
           </div>
 
           {filtered.map(p => (
-            <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-visible">
+            <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-visible transition-all duration-300 hover:scale-[1.01]">
 
               {p.image && (
                 <img
@@ -234,9 +255,15 @@ function App() {
                   </div>
 
                   <div className="relative">
-                    <button onClick={()=>setMenuOpen(menuOpen===p.id?null:p.id)}>⋮</button>
+                    <button 
+                      onClick={()=>setMenuOpen(menuOpen===p.id?null:p.id)}
+                      className="text-xl"
+                    >
+                      ⋮
+                    </button>
+
                     {menuOpen === p.id && (
-                      <div className="absolute right-0 mt-2 bg-white dark:bg-gray-700 shadow rounded-xl z-50">
+                      <div className="absolute right-0 mt-2 bg-white dark:bg-gray-700 shadow rounded-xl z-50 animate-fadeIn">
                         <div onClick={()=>editPuzzle(p)} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">Bearbeiten</div>
                         <div onClick={()=>deletePuzzle(p.id)} className="px-4 py-2 hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer">Löschen</div>
                       </div>
@@ -248,17 +275,22 @@ function App() {
               </div>
             </div>
           ))}
-        </>
+        </div>
       )}
 
+      {/* FAB */}
       {view === 'list' && (
-        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg">
+        <button 
+          onClick={()=>setShowForm(true)} 
+          className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg transition hover:scale-110 active:scale-95"
+        >
           +
         </button>
       )}
 
+      {/* FORM */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center animate-fadeIn">
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm space-y-2">
             <Input autoFocus placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
             <Input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
@@ -267,15 +299,16 @@ function App() {
             <input type="file" onChange={handleImageUpload}/>
 
             <div className="flex gap-2 mt-3">
-              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
-              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl">Abbrechen</button>
+              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2 transition hover:scale-105">Speichern</button>
+              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl transition hover:scale-105">Abbrechen</button>
             </div>
           </div>
         </div>
       )}
 
+      {/* IMAGE VIEW */}
       {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center" onClick={()=>setSelectedImage(null)}>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center animate-fadeIn" onClick={()=>setSelectedImage(null)}>
           <img src={selectedImage} className="max-w-full max-h-full" />
         </div>
       )}
@@ -286,5 +319,17 @@ function App() {
 
 ReactDOM.createRoot(document.getElementById("root")).render(<App />);
 </script>
+
+<style>
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.2s ease;
+}
+</style>
+
 </body>
 </html>
