@@ -17,9 +17,19 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
+function Input(props){
+  return (
+    <input
+      {...props}
+      className="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-400 transition"
+    />
+  );
+}
+
 function App() {
   const [puzzles, setPuzzles] = useState([]);
   const [dark, setDark] = useState(localStorage.getItem("dark") === "true");
+  const [view, setView] = useState("home");
   const [search, setSearch] = useState("");
   const [showSearch, setShowSearch] = useState(false);
   const [brandFilter, setBrandFilter] = useState("Alle");
@@ -118,9 +128,11 @@ function App() {
   return (
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">🧩 Puzzle</h1>
         <div className="flex gap-2">
+          <button onClick={()=>setView(view==='home'?'list':'home')} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">📊</button>
           <button onClick={()=>setShowSearch(!showSearch)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">🔍</button>
           <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
             {dark ? "☀️" : "🌙"}
@@ -128,76 +140,95 @@ function App() {
         </div>
       </div>
 
-      {showSearch && (
-        <input 
-          className="w-full mb-3 p-2 rounded-xl bg-white dark:bg-gray-800 transition-all"
-          placeholder="Suchen..." 
-          value={search} 
-          onChange={e=>setSearch(e.target.value)} 
-        />
-      )}
+      {/* Statistik View */}
+      {view === 'home' && (
+        <div className="space-y-3">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow">
+            <div className="text-sm opacity-60">Gesamt</div>
+            <div className="text-2xl font-bold">{puzzles.length}</div>
+          </div>
 
-      <div className="mb-4">
-        <select 
-          value={brandFilter} 
-          onChange={e=>setBrandFilter(e.target.value)}
-          className="w-full p-2 rounded-xl bg-white dark:bg-gray-800 dark:text-white"
-        >
-          {brands.map(b => <option key={b}>{b}</option>)}
-        </select>
-      </div>
-
-      {filtered.map(p => (
-        <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-hidden transform hover:scale-[1.02] transition">
-          {p.image && (
-            <img src={p.image} className="w-full h-40 object-cover cursor-pointer" onClick={()=>setSelectedImage(p.image)} />
-          )}
-
-          <div className="p-3">
-            <div className="font-bold text-lg">{p.name}</div>
-            <div className="text-sm opacity-60">{p.brand}</div>
-
-            <div className="text-sm mt-1">{p.pieces} Teile</div>
-
-            <div className="mt-2">
-              <StarRating value={p.rating || 0} onChange={()=>{}} />
-            </div>
-
-            <div className="flex gap-2 mt-3">
-              <button onClick={()=>editPuzzle(p)} className="flex-1 bg-yellow-400 rounded-xl py-1">Bearbeiten</button>
-              <button onClick={()=>deletePuzzle(p.id)} className="flex-1 bg-red-500 text-white rounded-xl py-1">Löschen</button>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow">
+            <div className="text-sm opacity-60">Ø Teile</div>
+            <div className="text-2xl font-bold">
+              {puzzles.length ? Math.round(puzzles.reduce((s,p)=>s+Number(p.pieces||0),0)/puzzles.length) : 0}
             </div>
           </div>
+
+          <button onClick={()=>setView('list')} className="w-full bg-blue-500 text-white p-3 rounded-xl">
+            Zur Sammlung
+          </button>
         </div>
-      ))}
+      )}
 
-      <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg hover:scale-110 transition">+
-      </button>
+      {/* Liste View */}
+      {view === 'list' && (
+        <>
+          {showSearch && (
+            <input 
+              className="w-full mb-3 p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
+              placeholder="Suchen..." 
+              value={search} 
+              onChange={e=>setSearch(e.target.value)} 
+            />
+          )}
 
+          <div className="mb-4">
+            <select 
+              value={brandFilter} 
+              onChange={e=>setBrandFilter(e.target.value)}
+              className="w-full p-2 rounded-xl bg-gray-100 dark:bg-gray-800 dark:text-white"
+            >
+              {brands.map(b => <option key={b}>{b}</option>)}
+            </select>
+          </div>
+
+          {filtered.map(p => (
+            <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-hidden">
+              {p.image && (
+                <img src={p.image} className="w-full h-40 object-cover" />
+              )}
+
+              <div className="p-3">
+                <div className="font-bold text-lg">{p.name}</div>
+                <div className="text-sm opacity-60">{p.brand}</div>
+                <div className="text-sm">{p.pieces} Teile</div>
+
+                <StarRating value={p.rating || 0} onChange={()=>{}} />
+
+                <div className="flex gap-2 mt-3">
+                  <button onClick={()=>editPuzzle(p)} className="flex-1 bg-yellow-400 rounded-xl py-1">Bearbeiten</button>
+                  <button onClick={()=>deletePuzzle(p.id)} className="flex-1 bg-red-500 text-white rounded-xl py-1">Löschen</button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </>
+      )}
+
+      {/* Floating Button */}
+      {view === 'list' && (
+        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg">+
+        </button>
+      )}
+
+      {/* Modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm">
-            <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-            <input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-            <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm space-y-2">
+            <Input placeholder="Motiv" autoFocus value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+            <Input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
+            <Input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
 
-            <div className="mt-2">
-              <StarRating value={form.rating} onChange={(val)=>setForm({...form, rating: val})} />
-            </div>
+            <StarRating value={form.rating} onChange={(val)=>setForm({...form, rating: val})} />
 
-            <input type="file" onChange={handleImageUpload}/>
+            <input type="file" onChange={handleImageUpload} />
 
             <div className="flex gap-2 mt-3">
               <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
               <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl">Abbrechen</button>
             </div>
           </div>
-        </div>
-      )}
-
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center" onClick={()=>setSelectedImage(null)}>
-          <img src={selectedImage} className="max-w-full max-h-full" />
         </div>
       )}
 
