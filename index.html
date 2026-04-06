@@ -1,11 +1,27 @@
-<!DOCTYPE html><html lang="de">
+<!DOCTYPE html>
+<html lang="de">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Puzzle App</title>  <script src="https://cdn.tailwindcss.com"></script>  <script>
+  <title>Puzzle App</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
     tailwind.config = { darkMode: 'class' }
-  </script>  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script></head><body class="bg-gray-100 dark:bg-gray-900 transition-colors">
-<div id="root"></div><script type="text/babel">
+  </script>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors">
+<div id="root"></div>
+
+<script type="text/babel">
 const { useState, useEffect } = React;
 
 const firebaseConfig = {
@@ -43,7 +59,12 @@ function App() {
   const [showForm, setShowForm] = useState(false);
   const [menuOpen, setMenuOpen] = useState(null);
 
-  const [form, setForm] = useState({ name:"", pieces:"", brand:"", rating:0, image:"" });
+  const [form, setForm] = useState({
+    name:"",
+    pieces:"",
+    brand:"",
+    image:""
+  });
 
   useEffect(() => {
     const unsub = db.collection("puzzles").onSnapshot(snap => {
@@ -60,7 +81,10 @@ function App() {
   const addOrUpdate = async () => {
     if (!form.name) return;
 
-    const cleaned = { ...form, brand: form.brand.trim() };
+    const cleaned = {
+      ...form,
+      brand: form.brand.trim()
+    };
 
     if (editId) {
       await db.collection("puzzles").doc(editId).set({
@@ -72,7 +96,7 @@ function App() {
       await db.collection("puzzles").add(cleaned);
     }
 
-    setForm({ name:"", pieces:"", brand:"", rating:0, image:"" });
+    setForm({ name:"", pieces:"", brand:"", image:"" });
     setShowForm(false);
   };
 
@@ -129,22 +153,12 @@ function App() {
 
     return (
       (!piecesFilter || String(p.pieces) === String(piecesFilter)) &&
-      (p.name?.toLowerCase().includes(text) || p.brand?.toLowerCase().includes(text)) &&
-      (brandFilter === "Alle" || p.brand?.toLowerCase().trim() === brandFilter.toLowerCase().trim())
+      (p.name?.toLowerCase().includes(text) ||
+       p.brand?.toLowerCase().includes(text)) &&
+      (brandFilter === "Alle" ||
+       p.brand?.toLowerCase().trim() === brandFilter.toLowerCase().trim())
     );
   });
-
-  const StarRating = ({ value, onChange }) => (
-    <div className="flex gap-1">
-      {[1,2,3,4,5].map(i => (
-        <span key={i}
-          className={`cursor-pointer text-xl ${i <= value ? 'text-yellow-400' : 'text-gray-400'}`}
-          onClick={()=>onChange(i)}>
-          ★
-        </span>
-      ))}
-    </div>
-  );
 
   return (
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
@@ -231,8 +245,6 @@ function App() {
                 </div>
 
                 <div className="text-sm">{p.pieces} Teile</div>
-
-                <StarRating value={p.rating || 0} onChange={()=>{}} />
               </div>
             </div>
           ))}
@@ -240,7 +252,8 @@ function App() {
       )}
 
       {view === 'list' && (
-        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg">+
+        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg">
+          +
         </button>
       )}
 
@@ -249,30 +262,4 @@ function App() {
           <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm space-y-2">
             <Input autoFocus placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
             <Input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-            <Input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
-
-            <StarRating value={form.rating} onChange={(val)=>setForm({...form, rating: val})} />
-
-            <input type="file" onChange={handleImageUpload}/>
-
-            <div className="flex gap-2 mt-3">
-              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
-              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl">Abbrechen</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center" onClick={()=>setSelectedImage(null)}>
-          <img src={selectedImage} className="max-w-full max-h-full" />
-        </div>
-      )}
-
-    </div>
-  );
-}
-
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
-</script></body>
-</html>
+            <Input placeholder="Hersteller" value={
