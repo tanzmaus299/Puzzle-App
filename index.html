@@ -27,15 +27,9 @@ function App() {
   const [filter, setFilter] = useState("Alle");
   const [editId, setEditId] = useState(null);
   const [selectedImage, setSelectedImage] = useState(null);
+  const [showForm, setShowForm] = useState(false);
 
-  const [form, setForm] = useState({
-    name: "",
-    pieces: "",
-    brand: "",
-    status: "Nicht gebaut",
-    rating: "",
-    image: "",
-  });
+  const [form, setForm] = useState({ name:"", pieces:"", brand:"", status:"Nicht gebaut", rating:"", image:"" });
 
   useEffect(() => {
     const unsub = db.collection("puzzles").onSnapshot(snap => {
@@ -59,11 +53,13 @@ function App() {
     }
 
     setForm({ name:"", pieces:"", brand:"", status:"Nicht gebaut", rating:"", image:"" });
+    setShowForm(false);
   };
 
   const editPuzzle = (p) => {
     setForm(p);
     setEditId(p.id);
+    setShowForm(true);
   };
 
   const deletePuzzle = async (id) => {
@@ -107,24 +103,25 @@ function App() {
   });
 
   return (
-    <div className="p-4 max-w-xl mx-auto text-gray-800 dark:text-gray-100">
+    <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
+      {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">🧩 Puzzle</h1>
-        <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded bg-gray-200 dark:bg-gray-700">
+        <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
           {dark ? "☀️" : "🌙"}
         </button>
       </div>
 
-      {/* Statistik */}
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow mb-4 text-sm">
-        Gesamt: {puzzles.length} | Fertig: {puzzles.filter(p=>p.status==="Fertig").length} | Ø Teile: {puzzles.length ? Math.round(puzzles.reduce((s,p)=>s+Number(p.pieces||0),0)/puzzles.length) : 0}
+      {/* Statistik minimal */}
+      <div className="mb-4 text-sm opacity-70">
+        {puzzles.length} Puzzle · {puzzles.filter(p=>p.status==="Fertig").length} fertig
       </div>
 
       {/* Suche */}
-      <div className="flex gap-2 mb-3">
-        <input className="flex-1 p-2 rounded bg-white dark:bg-gray-800" placeholder="Suchen..." value={search} onChange={e=>setSearch(e.target.value)} />
-        <select value={filter} onChange={e=>setFilter(e.target.value)} className="rounded">
+      <div className="flex gap-2 mb-4">
+        <input className="flex-1 p-2 rounded-xl bg-white dark:bg-gray-800" placeholder="Suchen..." value={search} onChange={e=>setSearch(e.target.value)} />
+        <select value={filter} onChange={e=>setFilter(e.target.value)} className="rounded-xl">
           <option>Alle</option>
           <option>Nicht gebaut</option>
           <option>In Arbeit</option>
@@ -132,45 +129,61 @@ function App() {
         </select>
       </div>
 
-      {/* Formular */}
-      <div className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow mb-4 grid gap-2">
-        <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-        <input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-        <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
-
-        <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
-          <option>Nicht gebaut</option>
-          <option>In Arbeit</option>
-          <option>Fertig</option>
-        </select>
-
-        <input placeholder="Bewertung" type="number" value={form.rating} onChange={e=>setForm({...form,rating:e.target.value})}/>
-
-        <input type="file" onChange={handleImageUpload}/>
-
-        <button onClick={addOrUpdate} className="bg-blue-500 text-white rounded p-2">
-          {editId ? "Speichern" : "Hinzufügen"}
-        </button>
-      </div>
-
       {/* Liste */}
       {filtered.map(p => (
-        <div key={p.id} className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow mb-3">
-          <div className="font-bold">{p.name} ({p.pieces})</div>
-          <div className="text-sm opacity-70">{p.brand}</div>
-          <div>{p.status}</div>
-          <div>⭐ {p.rating || "-"}</div>
-
+        <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-hidden">
           {p.image && (
-            <img src={p.image} className="mt-2 rounded-lg cursor-pointer" onClick={()=>setSelectedImage(p.image)} />
+            <img src={p.image} className="w-full h-40 object-cover cursor-pointer" onClick={()=>setSelectedImage(p.image)} />
           )}
 
-          <div className="mt-2 flex gap-2">
-            <button onClick={()=>editPuzzle(p)} className="bg-yellow-400 px-2 rounded">✏️</button>
-            <button onClick={()=>deletePuzzle(p.id)} className="bg-red-500 text-white px-2 rounded">❌</button>
+          <div className="p-3">
+            <div className="font-bold text-lg">{p.name}</div>
+            <div className="text-sm opacity-60">{p.brand}</div>
+
+            <div className="flex justify-between mt-2 text-sm">
+              <span>{p.pieces} Teile</span>
+              <span>{p.status}</span>
+            </div>
+
+            <div className="mt-2">⭐ {p.rating || "-"}</div>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={()=>editPuzzle(p)} className="flex-1 bg-yellow-400 rounded-xl py-1">Bearbeiten</button>
+              <button onClick={()=>deletePuzzle(p.id)} className="flex-1 bg-red-500 text-white rounded-xl py-1">Löschen</button>
+            </div>
           </div>
         </div>
       ))}
+
+      {/* Floating Button */}
+      <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl shadow-lg">+
+      </button>
+
+      {/* Modal Formular */}
+      {showForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm">
+            <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+            <input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
+            <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
+
+            <select value={form.status} onChange={e=>setForm({...form,status:e.target.value})}>
+              <option>Nicht gebaut</option>
+              <option>In Arbeit</option>
+              <option>Fertig</option>
+            </select>
+
+            <input placeholder="Bewertung" type="number" value={form.rating} onChange={e=>setForm({...form,rating:e.target.value})}/>
+
+            <input type="file" onChange={handleImageUpload}/>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
+              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 rounded-xl">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vollbild */}
       {selectedImage && (
