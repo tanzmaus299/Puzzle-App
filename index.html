@@ -10,6 +10,8 @@
     tailwind.config = { darkMode: 'class' }
   </script>
 
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -18,7 +20,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 
-<body class="bg-gray-100 dark:bg-gray-900">
+<body class="bg-gray-100 dark:bg-gray-900 transition-colors">
 <div id="root"></div>
 
 <script type="text/babel">
@@ -28,137 +30,320 @@ const firebaseConfig = {
   apiKey: "DEIN_API_KEY",
   authDomain: "puzzle-app-f4ad3.firebaseapp.com",
   projectId: "puzzle-app-f4ad3",
+  storageBucket: "puzzle-app-f4ad3.appspot.com",
+  messagingSenderId: "DEINE_ID",
+  appId: "DEINE_APP_ID"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-function App(){
+function Input(props){
+  return (
+    <input
+      {...props}
+      className="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white focus:ring-2 focus:ring-blue-400 transition"
+    />
+  );
+}
 
-  const [puzzles,setPuzzles] = useState([]);
-  const [view,setView] = useState("home");
-  const [dark,setDark] = useState(localStorage.getItem("dark")==="true");
-  const [form,setForm] = useState({name:"",pieces:"",brand:"",image:""});
-  const [showForm,setShowForm] = useState(false);
-  const [editId,setEditId] = useState(null);
+function App() {
 
-  useEffect(()=>{
-    const unsub = db.collection("puzzles").onSnapshot(snap=>{
-      setPuzzles(snap.docs.map(d=>({id:d.id,...d.data()})));
+  const [puzzles, setPuzzles] = useState([]);
+  const [dark, setDark] = useState(localStorage.getItem("dark") === "true");
+  const [view, setView] = useState("home");
+  const [search, setSearch] = useState("");
+  const [showSearch, setShowSearch] = useState(false);
+  const [brandFilter, setBrandFilter] = useState("Alle");
+  const [piecesFilter, setPiecesFilter] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [selectedImage, setSelectedImage] = useState(null);
+  const [showForm, setShowForm] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(null);
+
+  const [form, setForm] = useState({
+    name:"",
+    pieces:"",
+    brand:"",
+    image:""
+  });
+
+  useEffect(() => {
+    const unsub = db.collection("puzzles").onSnapshot(snap => {
+      setPuzzles(snap.docs.map(d => ({ id:d.id, ...d.data() })));
     });
-    return ()=>unsub();
-  },[]);
+    return () => unsub();
+  }, []);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", dark);
+    localStorage.setItem("dark", dark);
+  }, [dark]);
+
+  // Chart
   useEffect(()=>{
-    document.documentElement.classList.toggle("dark",dark);
-    localStorage.setItem("dark",dark);
-  },[dark]);
+    if(!puzzles.length) return;
 
-  const save = async ()=>{
-    if(!form.name) return;
+    const ctx = document.getElementById("chart");
+    if(!ctx) return;
 
-    if(editId){
-      await db.collection("puzzles").doc(editId).set(form);
+    if(window.myChart) window.myChart.destroy();
+
+    const data = Object.entries(
+      puzzles.reduce((acc,p)=>{
+        const key = p.pieces || "?"
+        acc[key] = (acc[key]||0)+1
+        return acc
+      },{})
+    );
+
+    window.myChart = new Chart(ctx, {
+      type: "bar",
+      data: {
+        labels: data.map(d=>d[0]),
+        datasets: [{ data: data.map(d=>d[1]) }]
+      },
+      options: {
+        plugins:{legend:{display:false}}
+      }
+    });
+
+  }, [puzzles]);
+
+  const addOrUpdate = async () => {
+    if (!form.name) return;
+
+    const cleaned = { ...form, brand: form.brand.trim() };
+
+    if (editId) {
+      await db.collection("puzzles").doc(editId).set({
+        ...cleaned,
+        image: cleaned.image || puzzles.find(p => p.id === editId)?.image || ""
+      });
       setEditId(null);
     } else {
-      await db.collection("puzzles").add(form);
+      await db.collection("puzzles").add(cleaned);
     }
 
-    setForm({name:"",pieces:"",brand:"",image:""});
+    setForm({ name:"", pieces:"", brand:"", image:"" });
     setShowForm(false);
   };
 
-  const del = async (id)=>{
-    if(!confirm("Wirklich löschen?")) return;
+  const editPuzzle = (p) => {
+    setForm(p);
+    setEditId(p.id);
+    setShowForm(true);
+  };
+
+  const deletePuzzle = async (id) => {
+    if (!window.confirm("Wirklich löschen?")) return;
     await db.collection("puzzles").doc(id).delete();
   };
 
-  const exportData = ()=>{
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(puzzles));
-    const a = document.createElement("a");
-    a.href = dataStr;
-    a.download = "puzzle-backup.json";
-    a.click();
-  };
-
-  const importData = async (e)=>{
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
 
+    const img = new Image();
     const reader = new FileReader();
 
-    reader.onload = async (event)=>{
-      const data = JSON.parse(event.target.result);
+    reader.onload = (event) => img.src = event.target.result;
 
-      if(!confirm("Backup wirklich importieren? Bestehende Daten bleiben erhalten.")) return;
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
 
-      for(const p of data){
-        await db.collection("puzzles").add(p);
-      }
+      const maxWidth = 600;
+      const scale = maxWidth / img.width;
 
-      alert("Import abgeschlossen!");
+      canvas.width = maxWidth;
+      canvas.height = img.height * scale;
+
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+      const compressed = canvas.toDataURL("image/jpeg", 0.6);
+      setForm(prev => ({ ...prev, image: compressed }));
     };
 
-    reader.readAsText(file);
+    reader.readAsDataURL(file);
   };
 
-  return(
+  const brands = ["Alle", ...new Set(puzzles.map(p => p.brand).filter(Boolean))];
+
+  const pieceGroups = Object.entries(
+    puzzles.reduce((acc, p) => {
+      const key = p.pieces || "Unbekannt";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {})
+  );
+
+  const filtered = puzzles.filter(p => {
+    const text = search.toLowerCase();
+
+    return (
+      (!piecesFilter || String(p.pieces) === String(piecesFilter)) &&
+      (p.name?.toLowerCase().includes(text) ||
+       p.brand?.toLowerCase().includes(text)) &&
+      (brandFilter === "Alle" ||
+       p.brand?.toLowerCase().trim() === brandFilter.toLowerCase().trim())
+    );
+  });
+
+  return (
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
-      <div className="flex justify-between mb-4">
-        <button onClick={()=>setView(view==="home"?"list":"home")}>
-          {view==="home"?"📋":"🏠"}
-        </button>
-
+      {/* Header */}
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">🧩 Puzzle</h1>
         <div className="flex gap-2">
-          <button onClick={()=>setDark(!dark)}>
-            {dark?"☀️":"🌙"}
+
+          <button onClick={()=>setView(view==='home'?'list':'home')} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
+            {view === 'home' ? '📋' : '🏠'}
           </button>
 
-          <button onClick={exportData}>💾</button>
+          <button onClick={()=>setShowSearch(!showSearch)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">🔍</button>
 
-          <label className="cursor-pointer">
-            📂
-            <input type="file" hidden onChange={importData}/>
-          </label>
+          <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
+            {dark ? "☀️" : "🌙"}
+          </button>
+
+          <button
+            onClick={()=>{
+              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(puzzles));
+              const a = document.createElement("a");
+              a.href = dataStr;
+              a.download = "puzzle-backup.json";
+              a.click();
+            }}
+            className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700"
+          >
+            💾
+          </button>
+
         </div>
       </div>
 
-      {view==="home" && (
-        <div>
-          <h2>Gesamt: {puzzles.length}</h2>
+      {/* HOME */}
+      {view === 'home' && (
+        <div className="space-y-3">
 
-          <button onClick={()=>setView("list")}>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow">
+            <div className="text-sm opacity-60">Gesamt</div>
+            <div className="text-2xl font-bold">{puzzles.length}</div>
+          </div>
+
+          <button 
+            onClick={() => {
+              setPiecesFilter(null);
+              setView('list');
+            }}
+            className="w-full bg-blue-500 text-white p-3 rounded-xl"
+          >
             Alle Puzzle anzeigen
           </button>
+
+          <canvas id="chart" className="bg-white dark:bg-gray-800 p-2 rounded-xl"></canvas>
+
+          <div className="space-y-2">
+            {pieceGroups.map(([pieces, count]) => (
+              <div key={pieces}
+                onClick={()=>{ setPiecesFilter(pieces); setView('list'); }}
+                className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow cursor-pointer flex justify-between"
+              >
+                <span>{pieces} Teile</span>
+                <span className="font-bold">{count}</span>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
-      {view==="list" && (
-        <div>
-          {puzzles.map(p=>(
-            <div key={p.id} className="border p-2 mb-2">
-              <b>{p.name}</b><br/>
-              {p.brand}<br/>
-              {p.pieces} Teile
+      {/* LISTE */}
+      {view === 'list' && (
+        <>
 
-              <div>
-                <button onClick={()=>{setForm(p);setEditId(p.id);setShowForm(true)}}>✏️</button>
-                <button onClick={()=>del(p.id)}>🗑️</button>
+          {showSearch && (
+            <input
+              className="w-full mb-3 p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
+              placeholder="Suchen..."
+              value={search}
+              onChange={e=>setSearch(e.target.value)}
+            />
+          )}
+
+          <div className="mb-4">
+            <select
+              value={brandFilter}
+              onChange={e=>setBrandFilter(e.target.value)}
+              className="w-full p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
+            >
+              {brands.map(b => <option key={b}>{b}</option>)}
+            </select>
+          </div>
+
+          {filtered.map(p => (
+            <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-visible">
+
+              {p.image && (
+                <img
+                  src={p.image}
+                  className="w-full h-40 object-cover cursor-pointer"
+                  onClick={()=>setSelectedImage(p.image)}
+                />
+              )}
+
+              <div className="p-3">
+                <div className="flex justify-between">
+                  <div>
+                    <div className="font-bold">{p.name}</div>
+                    <div className="text-sm opacity-60">{p.brand}</div>
+                  </div>
+
+                  <div className="relative">
+                    <button onClick={()=>setMenuOpen(menuOpen===p.id?null:p.id)}>⋮</button>
+                    {menuOpen === p.id && (
+                      <div className="absolute right-0 mt-2 bg-white dark:bg-gray-700 shadow rounded-xl">
+                        <div onClick={()=>editPuzzle(p)} className="px-4 py-2 cursor-pointer">Bearbeiten</div>
+                        <div onClick={()=>deletePuzzle(p.id)} className="px-4 py-2 cursor-pointer">Löschen</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="text-sm">{p.pieces} Teile</div>
               </div>
             </div>
           ))}
-        </div>
+        </>
+      )}
+
+      {view === 'list' && (
+        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl">
+          +
+        </button>
       )}
 
       {showForm && (
-        <div>
-          <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-          <input placeholder="Teile" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-          <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm space-y-2">
+            <Input autoFocus placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+            <Input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
+            <Input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
 
-          <button onClick={save}>Speichern</button>
-          <button onClick={()=>setShowForm(false)}>Abbrechen</button>
+            <input type="file" onChange={handleImageUpload}/>
+
+            <div className="flex gap-2 mt-3">
+              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
+              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl">Abbrechen</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {selectedImage && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center" onClick={()=>setSelectedImage(null)}>
+          <img src={selectedImage} className="max-w-full max-h-full" />
         </div>
       )}
 
