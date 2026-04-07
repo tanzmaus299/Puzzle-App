@@ -5,12 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Puzzle App</title>
 
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#3b82f6">
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = { darkMode: 'class' }
   </script>
-
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
@@ -20,8 +22,14 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 </head>
 
-<body class="bg-gray-100 dark:bg-gray-900 transition-colors">
+<body class="bg-gray-100 dark:bg-gray-900">
 <div id="root"></div>
+
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("service-worker.js");
+}
+</script>
 
 <script type="text/babel">
 const { useState, useEffect } = React;
@@ -30,337 +38,195 @@ const firebaseConfig = {
   apiKey: "DEIN_API_KEY",
   authDomain: "puzzle-app-f4ad3.firebaseapp.com",
   projectId: "puzzle-app-f4ad3",
-  storageBucket: "puzzle-app-f4ad3.appspot.com",
-  messagingSenderId: "DEINE_ID",
-  appId: "DEINE_APP_ID"
 };
 
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 
-function Input(props){
-  return (
-    <input
-      {...props}
-      className="w-full p-3 rounded-xl bg-gray-100 dark:bg-gray-700 text-black dark:text-white focus:ring-2 focus:ring-blue-400 transition"
-    />
-  );
-}
+function App(){
 
-function App() {
+  const [puzzles,setPuzzles] = useState([]);
+  const [view,setView] = useState("home");
+  const [dark,setDark] = useState(localStorage.getItem("dark")==="true");
+  const [form,setForm] = useState({name:"",pieces:"",brand:"",image:""});
+  const [showForm,setShowForm] = useState(false);
+  const [editId,setEditId] = useState(null);
 
-  const [puzzles, setPuzzles] = useState([]);
-  const [dark, setDark] = useState(localStorage.getItem("dark") === "true");
-  const [view, setView] = useState("home");
-  const [search, setSearch] = useState("");
-  const [showSearch, setShowSearch] = useState(false);
-  const [brandFilter, setBrandFilter] = useState("Alle");
-  const [piecesFilter, setPiecesFilter] = useState(null);
-  const [editId, setEditId] = useState(null);
-  const [selectedImage, setSelectedImage] = useState(null);
-  const [showForm, setShowForm] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(null);
-  const [sortBy, setSortBy] = useState("name");
+  const [importDataFile,setImportDataFile] = useState(null);
+  const [showImportModal,setShowImportModal] = useState(false);
 
-  const [form, setForm] = useState({
-    name:"",
-    pieces:"",
-    brand:"",
-    image:""
-  });
-
-  useEffect(() => {
-    const unsub = db.collection("puzzles").onSnapshot(snap => {
-      setPuzzles(snap.docs.map(d => ({ id:d.id, ...d.data() })));
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-    localStorage.setItem("dark", dark);
-  }, [dark]);
-
-  // Chart
   useEffect(()=>{
-    if(!puzzles.length) return;
-
-    const ctx = document.getElementById("chart");
-    if(!ctx) return;
-
-    if(window.myChart) window.myChart.destroy();
-
-    const data = Object.entries(
-      puzzles.reduce((acc,p)=>{
-        const key = p.pieces || "?"
-        acc[key] = (acc[key]||0)+1
-        return acc
-      },{})
-    );
-
-    window.myChart = new Chart(ctx, {
-      type: "bar",
-      data: {
-        labels: data.map(d=>d[0]),
-        datasets: [{ data: data.map(d=>d[1]) }]
-      },
-      options: {
-        plugins:{legend:{display:false}}
-      }
+    const unsub = db.collection("puzzles").onSnapshot(snap=>{
+      setPuzzles(snap.docs.map(d=>({id:d.id,...d.data()})));
     });
+    return ()=>unsub();
+  },[]);
 
-  }, [puzzles]);
+  useEffect(()=>{
+    document.documentElement.classList.toggle("dark",dark);
+    localStorage.setItem("dark",dark);
+  },[dark]);
 
-  const addOrUpdate = async () => {
-    if (!form.name) return;
+  const isDuplicate = (puzzle, list) => {
+    return list.some(p =>
+      p.name?.toLowerCase().trim() === puzzle.name?.toLowerCase().trim() &&
+      p.brand?.toLowerCase().trim() === puzzle.brand?.toLowerCase().trim() &&
+      String(p.pieces) === String(puzzle.pieces)
+    );
+  };
 
-    const cleaned = { ...form, brand: form.brand.trim() };
+  const save = async ()=>{
+    if(!form.name) return;
 
-    if (editId) {
-      await db.collection("puzzles").doc(editId).set({
-        ...cleaned,
-        image: cleaned.image || puzzles.find(p => p.id === editId)?.image || ""
-      });
-      setEditId(null);
-    } else {
-      await db.collection("puzzles").add(cleaned);
+    if(isDuplicate(form,puzzles)){
+      if(!confirm("Dieses Puzzle existiert bereits. Trotzdem speichern?")) return;
     }
 
-    setForm({ name:"", pieces:"", brand:"", image:"" });
+    if(editId){
+      await db.collection("puzzles").doc(editId).set(form);
+      setEditId(null);
+    } else {
+      await db.collection("puzzles").add(form);
+    }
+
+    setForm({name:"",pieces:"",brand:"",image:""});
     setShowForm(false);
   };
 
-  const editPuzzle = (p) => {
-    setForm(p);
-    setEditId(p.id);
-    setShowForm(true);
-  };
-
-  const deletePuzzle = async (id) => {
-    if (!window.confirm("Wirklich löschen?")) return;
+  const del = async (id)=>{
+    if(!confirm("Wirklich löschen?")) return;
     await db.collection("puzzles").doc(id).delete();
   };
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const img = new Image();
-    const reader = new FileReader();
-
-    reader.onload = (event) => img.src = event.target.result;
-
-    img.onload = () => {
-      const canvas = document.createElement("canvas");
-      const ctx = canvas.getContext("2d");
-
-      const maxWidth = 600;
-      const scale = maxWidth / img.width;
-
-      canvas.width = maxWidth;
-      canvas.height = img.height * scale;
-
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-      const compressed = canvas.toDataURL("image/jpeg", 0.6);
-      setForm(prev => ({ ...prev, image: compressed }));
-    };
-
-    reader.readAsDataURL(file);
+  const exportData = ()=>{
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(puzzles));
+    const a = document.createElement("a");
+    a.href = dataStr;
+    a.download = "puzzle-backup.json";
+    a.click();
   };
 
-  const brands = ["Alle", ...new Set(puzzles.map(p => p.brand).filter(Boolean))];
+  const handleImportFile = (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    setImportDataFile(file);
+    setShowImportModal(true);
+  };
 
-  const pieceGroups = Object.entries(
-    puzzles.reduce((acc, p) => {
-      const key = p.pieces || "Unbekannt";
-      acc[key] = (acc[key] || 0) + 1;
-      return acc;
-    }, {})
-  );
+  const processImport = async (mode)=>{
+    if(!importDataFile) return;
 
-  let filtered = puzzles.filter(p => {
-    const text = search.toLowerCase();
+    const reader = new FileReader();
 
-    return (
-      (!piecesFilter || String(p.pieces) === String(piecesFilter)) &&
-      (p.name?.toLowerCase().includes(text) ||
-       p.brand?.toLowerCase().includes(text)) &&
-      (brandFilter === "Alle" ||
-       p.brand?.toLowerCase().trim() === brandFilter.toLowerCase().trim())
-    );
-  });
+    reader.onload = async (event)=>{
+      const data = JSON.parse(event.target.result);
 
-  filtered.sort((a,b)=>{
-    if(sortBy === "name") return a.name.localeCompare(b.name);
-    if(sortBy === "pieces") return (a.pieces||0) - (b.pieces||0);
-    if(sortBy === "brand") return a.brand.localeCompare(b.brand);
-  });
+      if(mode==="replace"){
+        if(!confirm("Alle bestehenden Daten löschen?")) return;
 
-  return (
+        const snapshot = await db.collection("puzzles").get();
+        const batch = db.batch();
+        snapshot.docs.forEach(doc=>batch.delete(doc.ref));
+        await batch.commit();
+      }
+
+      for(const p of data){
+        if(mode==="skip"){
+          if(isDuplicate(p,puzzles)) continue;
+        }
+        await db.collection("puzzles").add(p);
+      }
+
+      alert("Import abgeschlossen!");
+      setShowImportModal(false);
+      setImportDataFile(null);
+    };
+
+    reader.readAsText(importDataFile);
+  };
+
+  return(
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
-      {/* Header */}
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">🧩 Puzzle</h1>
+      <div className="flex justify-between mb-4">
+        <button onClick={()=>setView(view==="home"?"list":"home")}>
+          {view==="home"?"📋":"🏠"}
+        </button>
+
         <div className="flex gap-2">
-
-          <button onClick={()=>setView(view==='home'?'list':'home')} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
-            {view === 'home' ? '📋' : '🏠'}
+          <button onClick={()=>setDark(!dark)}>
+            {dark?"☀️":"🌙"}
           </button>
 
-          <button onClick={()=>setShowSearch(!showSearch)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">🔍</button>
+          <button onClick={exportData}>💾</button>
 
-          <button onClick={()=>setDark(!dark)} className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700">
-            {dark ? "☀️" : "🌙"}
-          </button>
-
-          <button
-            onClick={()=>{
-              const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(puzzles));
-              const a = document.createElement("a");
-              a.href = dataStr;
-              a.download = "puzzle-backup.json";
-              a.click();
-            }}
-            className="px-3 py-1 rounded-full bg-gray-200 dark:bg-gray-700"
-          >
-            💾
-          </button>
-
+          <label className="cursor-pointer">
+            📂
+            <input type="file" hidden onChange={handleImportFile}/>
+          </label>
         </div>
       </div>
 
-      {/* HOME */}
-      {view === 'home' && (
-        <div className="space-y-3">
-
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl shadow">
-            <div className="text-sm opacity-60">Gesamt</div>
-            <div className="text-2xl font-bold">{puzzles.length}</div>
-          </div>
-
-          <button 
-            onClick={() => {
-              setPiecesFilter(null);
-              setView('list');
-            }}
-            className="w-full bg-blue-500 text-white p-3 rounded-xl"
-          >
-            Alle Puzzle anzeigen
+      {view==="home" && (
+        <div>
+          <h2 className="text-xl mb-2">Gesamt: {puzzles.length}</h2>
+          <button onClick={()=>setView("list")} className="bg-blue-500 text-white p-2 rounded">
+            Alle anzeigen
           </button>
-
-          <canvas id="chart" className="bg-white dark:bg-gray-800 p-2 rounded-xl"></canvas>
-
-          <div className="space-y-2">
-            {pieceGroups.map(([pieces, count]) => (
-              <div key={pieces}
-                onClick={()=>{ setPiecesFilter(pieces); setView('list'); }}
-                className="bg-white dark:bg-gray-800 p-3 rounded-xl shadow cursor-pointer flex justify-between"
-              >
-                <span>{pieces} Teile</span>
-                <span className="font-bold">{count}</span>
-              </div>
-            ))}
-          </div>
         </div>
       )}
 
-      {/* LISTE */}
-      {view === 'list' && (
-        <>
+      {view==="list" && (
+        <div>
+          {puzzles.map(p=>(
+            <div key={p.id} className="bg-white dark:bg-gray-800 p-3 mb-3 rounded shadow">
+              <b>{p.name}</b><br/>
+              {p.brand}<br/>
+              {p.pieces} Teile
 
-          {showSearch && (
-            <input
-              className="w-full mb-3 p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
-              placeholder="Suchen..."
-              value={search}
-              onChange={e=>setSearch(e.target.value)}
-            />
-          )}
-
-          <select
-            value={sortBy}
-            onChange={e=>setSortBy(e.target.value)}
-            className="w-full p-2 mb-3 rounded-xl bg-gray-100 dark:bg-gray-800"
-          >
-            <option value="name">Name</option>
-            <option value="pieces">Teile</option>
-            <option value="brand">Hersteller</option>
-          </select>
-
-          <div className="mb-4">
-            <select
-              value={brandFilter}
-              onChange={e=>setBrandFilter(e.target.value)}
-              className="w-full p-2 rounded-xl bg-gray-100 dark:bg-gray-800"
-            >
-              {brands.map(b => <option key={b}>{b}</option>)}
-            </select>
-          </div>
-
-          {filtered.map(p => (
-            <div key={p.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-md mb-4 overflow-visible">
-
-              {p.image && (
-                <img
-                  src={p.image}
-                  className="w-full h-40 object-cover cursor-pointer"
-                  onClick={()=>setSelectedImage(p.image)}
-                />
-              )}
-
-              <div className="p-3">
-                <div className="flex justify-between">
-                  <div>
-                    <div className="font-bold">{p.name}</div>
-                    <div className="text-sm opacity-60">{p.brand}</div>
-                  </div>
-
-                  <div className="relative">
-                    <button onClick={()=>setMenuOpen(menuOpen===p.id?null:p.id)}>⋮</button>
-                    {menuOpen === p.id && (
-                      <div className="absolute right-0 mt-2 bg-white dark:bg-gray-700 shadow rounded-xl">
-                        <div onClick={()=>editPuzzle(p)} className="px-4 py-2 cursor-pointer">Bearbeiten</div>
-                        <div onClick={()=>deletePuzzle(p.id)} className="px-4 py-2 cursor-pointer">Löschen</div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="text-sm">{p.pieces} Teile</div>
+              <div className="flex gap-2 mt-2">
+                <button onClick={()=>{setForm(p);setEditId(p.id);setShowForm(true)}}>✏️</button>
+                <button onClick={()=>del(p.id)}>🗑️</button>
               </div>
             </div>
           ))}
-        </>
-      )}
-
-      {view === 'list' && (
-        <button onClick={()=>setShowForm(true)} className="fixed bottom-6 right-6 bg-blue-500 text-white w-14 h-14 rounded-full text-2xl">
-          +
-        </button>
+        </div>
       )}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded-2xl w-full max-w-sm space-y-2">
-            <Input autoFocus placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-            <Input placeholder="Teile" type="number" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-            <Input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
+          <div className="bg-white dark:bg-gray-800 p-4 rounded w-80">
+            <input placeholder="Motiv" className="w-full mb-2" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+            <input placeholder="Teile" className="w-full mb-2" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
+            <input placeholder="Hersteller" className="w-full mb-2" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
 
-            <input type="file" onChange={handleImageUpload}/>
-
-            <div className="flex gap-2 mt-3">
-              <button onClick={addOrUpdate} className="flex-1 bg-blue-500 text-white rounded-xl p-2">Speichern</button>
-              <button onClick={()=>setShowForm(false)} className="flex-1 bg-gray-300 dark:bg-gray-600 rounded-xl">Abbrechen</button>
-            </div>
+            <button onClick={save} className="bg-blue-500 text-white w-full mb-2">Speichern</button>
+            <button onClick={()=>setShowForm(false)} className="w-full">Abbrechen</button>
           </div>
         </div>
       )}
 
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center" onClick={()=>setSelectedImage(null)}>
-          <img src={selectedImage} className="max-w-full max-h-full" />
+      {showImportModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
+          <div className="bg-white dark:bg-gray-800 p-4 rounded w-80 space-y-2">
+            <h2 className="font-bold">Import wählen</h2>
+
+            <button onClick={()=>processImport("add")} className="w-full bg-blue-500 text-white p-2 rounded">
+              ➕ Alles hinzufügen
+            </button>
+
+            <button onClick={()=>processImport("skip")} className="w-full bg-yellow-500 text-white p-2 rounded">
+              🚫 Duplikate überspringen
+            </button>
+
+            <button onClick={()=>processImport("replace")} className="w-full bg-red-500 text-white p-2 rounded">
+              🔄 Alles ersetzen
+            </button>
+
+            <button onClick={()=>setShowImportModal(false)} className="w-full">
+              Abbrechen
+            </button>
+          </div>
         </div>
       )}
 
