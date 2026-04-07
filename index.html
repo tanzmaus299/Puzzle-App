@@ -41,10 +41,6 @@ function App(){
   const [form,setForm] = useState({name:"",pieces:"",brand:"",image:""});
   const [showForm,setShowForm] = useState(false);
   const [editId,setEditId] = useState(null);
-  const [selectedImage,setSelectedImage] = useState(null);
-
-  const [importFile,setImportFile] = useState(null);
-  const [showImport,setShowImport] = useState(false);
 
   useEffect(()=>{
     const unsub = db.collection("puzzles").onSnapshot(snap=>{
@@ -58,20 +54,8 @@ function App(){
     localStorage.setItem("dark",dark);
   },[dark]);
 
-  const isDuplicate = (p, list)=>{
-    return list.some(x =>
-      x.name?.toLowerCase().trim() === p.name?.toLowerCase().trim() &&
-      x.brand?.toLowerCase().trim() === p.brand?.toLowerCase().trim() &&
-      String(x.pieces) === String(p.pieces)
-    );
-  };
-
   const save = async ()=>{
     if(!form.name) return;
-
-    if(isDuplicate(form,puzzles)){
-      if(!confirm("Puzzle existiert bereits. Trotzdem speichern?")) return;
-    }
 
     if(editId){
       await db.collection("puzzles").doc(editId).set(form);
@@ -97,56 +81,30 @@ function App(){
     a.click();
   };
 
-  const handleImportFile = (e)=>{
+  const importData = async (e)=>{
     const file = e.target.files[0];
     if(!file) return;
-    setImportFile(file);
-    setShowImport(true);
-  };
 
-  const processImport = async (mode)=>{
     const reader = new FileReader();
 
-    reader.onload = async (e)=>{
-      const data = JSON.parse(e.target.result);
+    reader.onload = async (event)=>{
+      const data = JSON.parse(event.target.result);
 
-      if(mode==="replace"){
-        if(!confirm("Alle Daten löschen?")) return;
-
-        const snap = await db.collection("puzzles").get();
-        const batch = db.batch();
-        snap.docs.forEach(doc=>batch.delete(doc.ref));
-        await batch.commit();
-      }
+      if(!confirm("Backup wirklich importieren? Bestehende Daten bleiben erhalten.")) return;
 
       for(const p of data){
-        if(mode==="skip" && isDuplicate(p,puzzles)) continue;
         await db.collection("puzzles").add(p);
       }
 
-      alert("Import fertig");
-      setShowImport(false);
-      setImportFile(null);
+      alert("Import abgeschlossen!");
     };
 
-    reader.readAsText(importFile);
-  };
-
-  const handleImage = (e)=>{
-    const file = e.target.files[0];
-    if(!file) return;
-
-    const reader = new FileReader();
-    reader.onload = ev=>{
-      setForm({...form,image:ev.target.result});
-    };
-    reader.readAsDataURL(file);
+    reader.readAsText(file);
   };
 
   return(
     <div className="p-4 max-w-md mx-auto text-gray-800 dark:text-gray-100">
 
-      {/* HEADER */}
       <div className="flex justify-between mb-4">
         <button onClick={()=>setView(view==="home"?"list":"home")}>
           {view==="home"?"📋":"🏠"}
@@ -159,40 +117,32 @@ function App(){
 
           <button onClick={exportData}>💾</button>
 
-          <label>
+          <label className="cursor-pointer">
             📂
-            <input type="file" hidden onChange={handleImportFile}/>
+            <input type="file" hidden onChange={importData}/>
           </label>
         </div>
       </div>
 
-      {/* HOME */}
       {view==="home" && (
         <div>
-          <h2 className="text-xl mb-2">Gesamt: {puzzles.length}</h2>
-          <button onClick={()=>setView("list")} className="bg-blue-500 text-white p-2 rounded">
-            Alle anzeigen
+          <h2>Gesamt: {puzzles.length}</h2>
+
+          <button onClick={()=>setView("list")}>
+            Alle Puzzle anzeigen
           </button>
         </div>
       )}
 
-      {/* LIST */}
       {view==="list" && (
         <div>
           {puzzles.map(p=>(
-            <div key={p.id} className="bg-white dark:bg-gray-800 p-3 mb-3 rounded shadow">
-              
-              {p.image && (
-                <img src={p.image} className="w-full h-40 object-cover mb-2 cursor-pointer"
-                  onClick={()=>setSelectedImage(p.image)}
-                />
-              )}
-
+            <div key={p.id} className="border p-2 mb-2">
               <b>{p.name}</b><br/>
               {p.brand}<br/>
               {p.pieces} Teile
 
-              <div className="flex gap-2 mt-2">
+              <div>
                 <button onClick={()=>{setForm(p);setEditId(p.id);setShowForm(true)}}>✏️</button>
                 <button onClick={()=>del(p.id)}>🗑️</button>
               </div>
@@ -201,53 +151,14 @@ function App(){
         </div>
       )}
 
-      {/* FORM */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded w-80">
-            <input className="w-full mb-2" placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
-            <input className="w-full mb-2" placeholder="Teile" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
-            <input className="w-full mb-2" placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
+        <div>
+          <input placeholder="Motiv" value={form.name} onChange={e=>setForm({...form,name:e.target.value})}/>
+          <input placeholder="Teile" value={form.pieces} onChange={e=>setForm({...form,pieces:e.target.value})}/>
+          <input placeholder="Hersteller" value={form.brand} onChange={e=>setForm({...form,brand:e.target.value})}/>
 
-            <input type="file" onChange={handleImage} className="mb-2"/>
-
-            <button onClick={save} className="bg-blue-500 text-white w-full mb-2">Speichern</button>
-            <button onClick={()=>setShowForm(false)} className="w-full">Abbrechen</button>
-          </div>
-        </div>
-      )}
-
-      {/* IMAGE MODAL */}
-      {selectedImage && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center"
-          onClick={()=>setSelectedImage(null)}
-        >
-          <img src={selectedImage} className="max-w-full max-h-full"/>
-        </div>
-      )}
-
-      {/* IMPORT MODAL */}
-      {showImport && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center">
-          <div className="bg-white dark:bg-gray-800 p-4 rounded w-80 space-y-2">
-            <h2 className="font-bold">Import wählen</h2>
-
-            <button onClick={()=>processImport("add")} className="w-full bg-blue-500 text-white p-2 rounded">
-              ➕ Hinzufügen
-            </button>
-
-            <button onClick={()=>processImport("skip")} className="w-full bg-yellow-500 text-white p-2 rounded">
-              🚫 Duplikate überspringen
-            </button>
-
-            <button onClick={()=>processImport("replace")} className="w-full bg-red-500 text-white p-2 rounded">
-              🔄 Alles ersetzen
-            </button>
-
-            <button onClick={()=>setShowImport(false)} className="w-full">
-              Abbrechen
-            </button>
-          </div>
+          <button onClick={save}>Speichern</button>
+          <button onClick={()=>setShowForm(false)}>Abbrechen</button>
         </div>
       )}
 
