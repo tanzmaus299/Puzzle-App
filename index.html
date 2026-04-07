@@ -84,7 +84,7 @@ function App() {
   }, [dark]);
 
   // Chart
-  /*useEffect(()=>{
+ /* useEffect(()=>{
     if(!puzzles.length) return;
 
     const ctx = document.getElementById("chart");
@@ -98,7 +98,7 @@ function App() {
         acc[key] = (acc[key]||0)+1
         return acc
       },{})
-    );*/
+    );
 
     window.myChart = new Chart(ctx, {
       type: "bar",
@@ -111,7 +111,7 @@ function App() {
       }
     });
 
-  }, [puzzles]);
+  }, [puzzles]);*/
 
   const addOrUpdate = async () => {
     if (!form.name) return;
