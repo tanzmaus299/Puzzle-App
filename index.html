@@ -140,10 +140,16 @@ function App() {
     setShowForm(true);
   };
 
+
   const deletePuzzle = async (id) => {
+  console.log("Lösche ID:", id);
+  await db.collection("puzzles").doc(id).delete();
+};
+  
+  /*const deletePuzzle = async (id) => {
     if (!window.confirm("Wirklich löschen?")) return;
     await db.collection("puzzles").doc(id).delete();
-  };
+  };*/
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
